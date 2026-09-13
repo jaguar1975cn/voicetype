@@ -66,6 +66,20 @@ forgotten recording (the capped audio is still transcribed on the next press).
 needs a real recording — see `tests/fixtures/README.md`; espeak-ng's Mandarin
 is too synthetic for Whisper to decode, so it cannot be generated.
 
+## Known limits
+
+An isolated English word inside an otherwise Chinese sentence is occasionally
+transliterated into same-sounding hanzi rather than kept as English — observed
+with "把这个 function 重构一下" coming out as "把这个方形重构一下".
+
+This is per-word acoustics, not a general failure: forcing `language=en` on
+that same audio returns "Re-enable the function", so the word was recognised;
+the zh segment decoder then mapped it onto matching characters. Terms with
+distinctive pronunciation (API, response, cache) survive reliably, with or
+without `initial_prompt`. Neither a bigger model (large-v3 behaves the same as
+turbo here) nor a code-switching prompt changes it, so don't spend time
+tuning those — say the word more distinctly, or edit the one word afterwards.
+
 ## Troubleshooting
 
 | Symptom | Check |

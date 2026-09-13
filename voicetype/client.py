@@ -95,13 +95,28 @@ def _current_recording():
     return pid
 
 
+def record_command(cfg, wav_path) -> list[str]:
+    """argv for one capped recording.
+
+    16kHz mono s16 is what Whisper resamples to anyway, so capturing it
+    directly avoids a conversion. `timeout -s INT` rather than the default
+    SIGTERM: pw-record only writes the RIFF header on a clean exit.
+    """
+    cmd = ["timeout", "-s", "INT", str(int(cfg["max_seconds"])),
+           "pw-record", "--rate", "16000", "--channels", "1", "--format", "s16"]
+    if cfg.get("source"):
+        # Pinned by node.name, not node id: ids are reassigned when a device
+        # is replugged, and the default source moves on its own when e.g. a
+        # bluetooth headset connects.
+        cmd += ["--target", cfg["source"]]
+    return cmd + [str(wav_path)]
+
+
 def start(cfg, args) -> int:
     config.STATE_DIR.mkdir(parents=True, exist_ok=True)
     WAV_FILE.unlink(missing_ok=True)
     proc = subprocess.Popen(
-        ["timeout", "-s", "INT", str(int(cfg["max_seconds"])),
-         "pw-record", "--rate", "16000", "--channels", "1", "--format", "s16",
-         str(WAV_FILE)],
+        record_command(cfg, WAV_FILE),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     PID_FILE.write_text(str(proc.pid))

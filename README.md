@@ -40,7 +40,13 @@ shortcut must exist in the target app, and terminals need the second hotkey.
 
     systemctl --user restart voicetype
 
-Useful knobs: `initial_prompt` biases jargon and names;
+`source` pins the microphone by PipeWire `node.name`, so changing the system
+default input — or a bluetooth headset connecting — cannot silently move
+dictation to another mic. List candidates with:
+
+    pw-cli ls Node | grep -B2 'Audio/Source'
+
+Other useful knobs: `initial_prompt` biases jargon and names;
 `halfwidth_punctuation` converts ，。？！ to ASCII; `max_seconds` caps a
 forgotten recording (the capped audio is still transcribed on the next press).
 
@@ -69,6 +75,7 @@ is too synthetic for Whisper to decode, so it cannot be generated.
 | Nothing pastes, text is on clipboard | target app has no Ctrl+V; use `Shift+Super+Z` |
 | CUDA out of memory | another process is on the pinned GPU: `nvidia-smi` |
 | Wrong language picked | set `language = "zh"` or `"en"` if you stop code-switching |
+| Recording is silent | wrong mic: check `source` against `wpctl status`, and `pactl get-source-mute <name>` |
 
 ### Note on cudaSetDevice
 

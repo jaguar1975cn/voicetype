@@ -25,6 +25,8 @@ DEFAULTS = {
     "language": "",
     "initial_prompt": "",
     "halfwidth_punctuation": False,
+    # PipeWire node.name to capture from. Empty follows the system default.
+    "source": "",
     "max_seconds": 120,
     "paste_key": "ctrl+v",
     "beep": True,

@@ -15,7 +15,7 @@ STATE_DIR = Path(
 SOCKET_PATH = STATE_DIR / "daemon.sock"
 
 DEFAULTS = {
-    "model": "large-v3-turbo",
+    "model": "large-v3",
     # GPU UUID or numeric index. A UUID is stable across reboots and driver
     # reorderings; an index is not.
     "gpu": "",

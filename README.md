@@ -22,7 +22,7 @@ Fedora:
 
 ## Install
 
-    git clone <this repo> && cd voice-typing
+    git clone https://github.com/jaguar1975cn/voicetype && cd voicetype
     sudo ./install-root.sh      # ydotool + /dev/uinput access
     #   log out and back in for the group change
     ./install.sh                # venv, commands, services, hotkeys

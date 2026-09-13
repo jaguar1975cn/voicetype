@@ -3,6 +3,8 @@ name = "voicetype"
 version = "0.1.0"
 description = "Local push-to-talk dictation for GNOME/Wayland, mixed Chinese and English"
 requires-python = ">=3.12,<3.13"
+license = "MIT"
+readme = "README.md"
 dependencies = [
     "faster-whisper>=1.1.0",
     # CTranslate2 dlopen()s these by soname and does not depend on them
@@ -11,6 +13,10 @@ dependencies = [
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12==9.*",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jaguar1975cn/voicetype"
+Issues = "https://github.com/jaguar1975cn/voicetype/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

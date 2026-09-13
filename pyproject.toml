@@ -1,8 +1,24 @@
 [project]
 name = "voicetype"
 version = "0.1.0"
+description = "Local push-to-talk dictation for GNOME/Wayland, mixed Chinese and English"
 requires-python = ">=3.12,<3.13"
-dependencies = ["faster-whisper>=1.1.0"]
+dependencies = [
+    "faster-whisper>=1.1.0",
+    # CTranslate2 dlopen()s these by soname and does not depend on them
+    # itself. Without them the first transcription fails with
+    # "Library libcublas.so.12 is not found or cannot be loaded".
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12==9.*",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+voicetype-daemon = "voicetype.daemon:main"
+voicetype-toggle = "voicetype.client:main"
+voicetype-record-fixture = "voicetype.fixture:main"
 
 [build-system]
 requires = ["hatchling"]

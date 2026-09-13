@@ -12,6 +12,9 @@
   Record it with `voicetype-record-fixture mixed_zh_en`; tests needing it skip
   when it is absent.
 
+  It is gitignored on purpose: a recording is your own voice, and committing
+  one publishes it. Keep it local.
+
   Keep this phrase OUT of `initial_prompt`. Whisper will happily parrot a
   phrase it was primed with, which makes the test pass without proving the
   model can code-switch at all.

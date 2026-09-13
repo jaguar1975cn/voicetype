@@ -1,7 +1,46 @@
 # voicetype
 
 Local push-to-talk dictation for GNOME/Wayland. Mixed Chinese + English in a
-single utterance, no cloud, no API key.
+single utterance, no cloud, no API key, no audio leaves the machine.
+
+Press a hotkey, speak, press again — the text lands in whatever window has
+focus.
+
+## Requirements
+
+- **GNOME on Wayland.** The paste path is built for Mutter, which does not
+  implement the virtual-keyboard protocol (so `wtype` cannot work). Other
+  compositors need a different insertion method.
+- **An NVIDIA GPU**, ~2GB free VRAM for the default model. There is no CPU
+  fallback.
+- **Python 3.12** — faster-whisper's dependency wheels.
+- **PipeWire** (`pw-record`), `wl-clipboard`, `libnotify`, and `ydotool`.
+
+Fedora:
+
+    sudo dnf install pipewire-utils wl-clipboard libnotify
+
+## Install
+
+    git clone <this repo> && cd voice-typing
+    sudo ./install-root.sh      # ydotool + /dev/uinput access
+    #   log out and back in for the group change
+    ./install.sh                # venv, commands, services, hotkeys
+
+`install.sh` is safe to re-run; it will not overwrite an existing config or
+disturb keyboard shortcuts you already have. It creates a venv in
+`~/.local/share/voicetype/venv` and installs this repo into it in editable
+mode, so the checkout stays the source of truth.
+
+The model (~1.6GB) downloads on the daemon's first start. Watch it with:
+
+    journalctl --user -u voicetype -f
+
+**What `install-root.sh` does, and why it matters:** it adds a udev rule making
+`/dev/uinput` writable by the `input` group and adds you to that group. This
+lets any process running as you synthesise keystrokes system-wide. That is
+inherent to keystroke injection on Wayland, not specific to this tool, but it
+is a real reduction in isolation — read the script before running it.
 
 ## How it works
 
@@ -11,8 +50,9 @@ single utterance, no cloud, no API key.
                       └─▶ wl-copy ──▶ ydotool ctrl+v ──▶ focused window
 
 A `systemd --user` daemon holds Whisper `large-v3-turbo` resident so the
-hotkey does not pay the model load on every use. It is pinned to the RTX 3050
-via `CUDA_VISIBLE_DEVICES`, leaving the RTX 5080 free.
+hotkey does not pay the ~10-20s model load on every use. On a multi-GPU box,
+set `gpu` in the config to pin it to one card via `CUDA_VISIBLE_DEVICES` and
+keep it off whatever else is using the GPU.
 
 Language is auto-detected per utterance rather than fixed, which is what
 code-switched speech ("把这个 function 重构一下") needs.
@@ -58,13 +98,17 @@ forgotten recording (the capped audio is still transcribed on the next press).
 
 ## Tests
 
-    cd ~/work/ai/test/voice-typing
-    ./venv/bin/python -m pytest tests/ -q          # all
-    ./venv/bin/python -m pytest tests/ -q -m "not slow"   # no GPU needed
+    ~/.local/share/voicetype/venv/bin/python -m pytest tests/ -q
+    ~/.local/share/voicetype/venv/bin/python -m pytest tests/ -q -m "not slow"
 
-`tests/test_transcribe.py` needs the daemon running. The code-switched test
-needs a real recording — see `tests/fixtures/README.md`; espeak-ng's Mandarin
-is too synthetic for Whisper to decode, so it cannot be generated.
+The second form needs no GPU and no daemon. `tests/test_transcribe.py` needs
+the daemon running.
+
+The code-switched test needs a recording of your own voice, which is
+deliberately not in this repo — recordings are personal data. Make one with
+`voicetype-record-fixture mixed_zh_en` (see `tests/fixtures/README.md` for the
+phrase); the test skips while it is absent. espeak-ng's Mandarin is too
+synthetic for Whisper to decode, so it cannot be synthesised.
 
 ## Known limits
 
@@ -90,6 +134,16 @@ tuning those — say the word more distinctly, or edit the one word afterwards.
 | CUDA out of memory | another process is on the pinned GPU: `nvidia-smi` |
 | Wrong language picked | set `language = "zh"` or `"en"` if you stop code-switching |
 | Recording is silent | wrong mic: check `source` against `wpctl status`, and `pactl get-source-mute <name>` |
+
+## Uninstall
+
+    systemctl --user disable --now voicetype ydotoold
+    rm -f ~/.local/bin/voicetype-{daemon,toggle,record-fixture}
+    rm -f ~/.config/systemd/user/{voicetype,ydotoold}.service
+    rm -rf ~/.local/share/voicetype ~/.config/voicetype
+    sudo rm -f /etc/udev/rules.d/60-uinput-ydotool.rules
+
+Clear the shortcuts in Settings → Keyboard → Custom Shortcuts.
 
 ### Note on cudaSetDevice
 

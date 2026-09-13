@@ -1,0 +1,17 @@
+[Unit]
+Description=Voice typing Whisper daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@BIN@/voicetype-daemon
+Restart=on-failure
+RestartSec=5
+# Loading the model touches the GPU and can take a while on first run,
+# when the weights are still being downloaded.
+TimeoutStartSec=600
+Nice=-5
+
+[Install]
+WantedBy=graphical-session.target

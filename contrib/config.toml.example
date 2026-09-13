@@ -1,0 +1,47 @@
+# voicetype configuration.
+# Restart after changing model or gpu:  systemctl --user restart voicetype
+
+# Whisper model. large-v3-turbo is multilingual and handles mixed
+# Chinese/English. "large-v3" is slower and uses ~1.7GB more VRAM; measured
+# identical on code-switching, possibly better on long monolingual speech.
+model = "large-v3-turbo"
+
+# GPU to pin to, as a "GPU-<uuid>" string from `nvidia-smi -L`, or a numeric
+# index. Empty uses the default device.
+#
+# Pin it if you have more than one GPU: this keeps the daemon off a card
+# something else is using, and the pin must be a UUID rather than an index
+# because indices shift when the driver reorders devices.
+gpu = ""
+
+compute_type = "float16"
+
+# Microphone, as a PipeWire node.name from `pw-cli ls Node | grep node.name`.
+# Empty follows the system default input, which means dictation moves if you
+# change the default or a bluetooth headset connects and grabs it.
+source = ""
+
+# "" auto-detects per utterance, which is what mixed-language speech needs.
+# Set "zh" or "en" only if you never code-switch.
+language = ""
+
+# Biases vocabulary toward your jargon, and nudges spacing/punctuation.
+# Keep it short, and keep the example phrases unrelated to anything you
+# actually dictate -- the model will happily repeat a phrase it was primed
+# with. Example for zh/en technical speech:
+#   initial_prompt = "以下是中英文混合的技术讨论,英文术语保留原文,不要音译成汉字。例如:这个 bug 的 root cause 还没定位。"
+initial_prompt = ""
+
+# Convert Chinese ，。？！ to ASCII , . ? !
+halfwidth_punctuation = false
+
+# Hard stop for a recording you forgot to end, in seconds. The audio captured
+# up to the cap is still transcribed on the next press.
+max_seconds = 120
+
+# Keystroke used to paste. Terminals need ctrl+shift+v; the second hotkey
+# overrides this per invocation.
+paste_key = "ctrl+v"
+
+# Audio cue on start and stop.
+beep = true

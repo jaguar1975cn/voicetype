@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Personal voice recordings. Fixtures you record contain your own voice;
+# keep them local. Tests that need one skip when it is absent.
+tests/fixtures/mixed_zh_en.wav
+tests/fixtures/*.local.wav

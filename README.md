@@ -13,12 +13,24 @@ focus.
   compositors need a different insertion method.
 - **An NVIDIA GPU**, ~2GB free VRAM for the default model. There is no CPU
   fallback.
-- **Python 3.12** — faster-whisper's dependency wheels.
+- **Python 3.12** — faster-whisper's dependency wheels. Or just
+  [uv](https://github.com/astral-sh/uv), which fetches its own interpreter;
+  `install.sh` uses it when present.
 - **PipeWire** (`pw-record`), `wl-clipboard`, `libnotify`, and `ydotool`.
 
-Fedora:
+| Distro | Command |
+|---|---|
+| Fedora | `sudo dnf install pipewire-utils wl-clipboard libnotify` |
+| Debian / Ubuntu | `sudo apt install pipewire-bin wl-clipboard libnotify-bin` |
+| Arch | `sudo pacman -S pipewire wl-clipboard libnotify` |
+| openSUSE | `sudo zypper install pipewire-tools wl-clipboard libnotify-tools` |
 
-    sudo dnf install pipewire-utils wl-clipboard libnotify
+`ydotool` is installed by `install-root.sh`, which handles all four. Run
+`install.sh` on any other distro and it will name the missing commands so you
+can map them yourself.
+
+Only Fedora 43 is tested on real hardware — the other package names come from
+each distro's index. If one is wrong, please open an issue.
 
 ## Install
 

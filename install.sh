@@ -16,17 +16,26 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33mwarning: %s\033[0m\n' "$*" >&2; }
 
 # ---------------------------------------------------------------- checks
+. "$REPO/contrib/distro-pkgs.sh"
+
 say "Checking prerequisites"
-missing=()
+PM=$(detect_pm)
+missing=() missing_pkgs=()
 for c in pw-record wl-copy wl-paste notify-send; do
-  command -v "$c" >/dev/null || missing+=("$c")
+  if ! command -v "$c" >/dev/null; then
+    missing+=("$c")
+    missing_pkgs+=("$(pkg_for "$c" "$PM")")
+  fi
 done
 if [ ${#missing[@]} -gt 0 ]; then
-  echo "Missing: ${missing[*]}"
-  echo "On Fedora: sudo dnf install pipewire-utils wl-clipboard libnotify"
+  echo "Missing commands: ${missing[*]}"
+  echo "Install them with:"
+  install_hint "$PM" "${missing_pkgs[@]}"
   exit 1
 fi
-command -v ydotool >/dev/null || warn "ydotool not installed -- run install-root.sh, or text insertion will fail"
+if ! command -v ydotool >/dev/null; then
+  warn "ydotool not installed -- text insertion will fail. Run: sudo ./install-root.sh"
+fi
 command -v nvidia-smi >/dev/null || warn "no nvidia-smi; this needs an NVIDIA GPU (set device=cpu support is not implemented)"
 [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || warn "not a Wayland session; the paste path targets GNOME/Wayland"
 
@@ -40,8 +49,13 @@ if ! command -v uv >/dev/null; then
   done
   if [ -z "$PY" ]; then
     echo "Need Python 3.12 (faster-whisper wheels) or uv."
-    echo "  Fedora: sudo dnf install python3.12"
-    echo "  or:     curl -LsSf https://astral.sh/uv/install.sh | sh"
+    case "$(detect_pm)" in
+      dnf)     echo "  sudo dnf install python3.12" ;;
+      apt-get) echo "  sudo apt install python3.12 python3.12-venv" ;;
+      pacman)  echo "  Arch ships only current Python; use uv instead" ;;
+      zypper)  echo "  sudo zypper install python312" ;;
+    esac
+    echo "  uv (any distro): curl -LsSf https://astral.sh/uv/install.sh | sh"
     exit 1
   fi
 fi

@@ -47,12 +47,20 @@ def test_english_is_transcribed():
 
 @needs_daemon
 def test_code_switched_zh_en():
-    """The whole point of large-v3-turbo here: one model, both languages."""
+    """One model, both languages: English terms survive as English.
+
+    The failure this guards against is transliteration -- the decoder picking
+    zh for the whole segment and rendering an English word as same-sounding
+    hanzi ("function" -> "方形") -- not merely dropping the word.
+
+    Expected recording: 这个 API 的 response 有点慢，需要加 cache
+    """
     r = transcribe("mixed_zh_en.wav")
     assert "error" not in r, r
     text = r["text"]
-    assert "function" in text.lower(), f"English token lost: {text!r}"
     assert any("一" <= c <= "鿿" for c in text), f"Chinese lost: {text!r}"
+    missing = [w for w in ("api", "response", "cache") if w not in text.lower()]
+    assert not missing, f"English terms {missing} transliterated or dropped: {text!r}"
 
 
 @needs_daemon

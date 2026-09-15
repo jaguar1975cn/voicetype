@@ -23,6 +23,19 @@ _model = None
 _model_lock = threading.Lock()
 _gpu_lock = threading.Lock()
 
+# A native (CUDA) hang inside model.transcribe cannot be unwound from Python:
+# py-spy and gdb both failed to catch the wedged thread at a safe point, and
+# every later request then queues behind _gpu_lock forever -- the hotkey
+# "records" but no response ever returns. The only recovery is to exit
+# nonzero and let systemd's Restart=on-failure bring the daemon back.
+# Measured transcribes run ~1s; 60s leaves headroom for a full max_seconds
+# clip on the slowest pinned GPU.
+TRANSCRIBE_TIMEOUT = 60.0
+
+# monotonic timestamp of the in-flight request, or None when idle. A single
+# float written/cleared under the GIL is safe enough for a 2s poll.
+_busy_since: float | None = None
+
 
 def pin_gpu(gpu: str) -> None:
     """Restrict the process to one GPU, before any CUDA initialisation.
@@ -70,27 +83,47 @@ def get_model(cfg):
 
 
 def transcribe(wav_path: str, cfg: dict) -> dict:
-    model = get_model(cfg)
-    t = time.time()
-    with _gpu_lock:
-        segments, info = model.transcribe(
-            wav_path,
-            language=cfg["language"] or None,
-            initial_prompt=cfg["initial_prompt"] or None,
-            beam_size=5,
-            vad_filter=True,
-            condition_on_previous_text=False,
+    global _busy_since
+    _busy_since = time.monotonic()
+    try:
+        model = get_model(cfg)
+        t = time.time()
+        with _gpu_lock:
+            segments, info = model.transcribe(
+                wav_path,
+                language=cfg["language"] or None,
+                initial_prompt=cfg["initial_prompt"] or None,
+                beam_size=5,
+                vad_filter=True,
+                condition_on_previous_text=False,
+            )
+            # Generation is lazy; the GPU work happens while draining segments.
+            raw = "".join(s.text for s in segments)
+        text = clean(raw, halfwidth=cfg["halfwidth_punctuation"])
+        if is_noise(text):
+            text = ""
+        log.info(
+            "transcribed %.1fs audio in %.2fs lang=%s -> %d chars",
+            info.duration, time.time() - t, info.language, len(text),
         )
-        # Generation is lazy; the GPU work happens while draining segments.
-        raw = "".join(s.text for s in segments)
-    text = clean(raw, halfwidth=cfg["halfwidth_punctuation"])
-    if is_noise(text):
-        text = ""
-    log.info(
-        "transcribed %.1fs audio in %.2fs lang=%s -> %d chars",
-        info.duration, time.time() - t, info.language, len(text),
-    )
-    return {"text": text, "language": info.language, "audio_seconds": info.duration}
+        return {"text": text, "language": info.language,
+                "audio_seconds": info.duration}
+    finally:
+        _busy_since = None
+
+
+def _stuck(deadline: float) -> bool:
+    started = _busy_since
+    return started is not None and time.monotonic() - started > deadline
+
+
+def _watchdog(deadline: float = TRANSCRIBE_TIMEOUT) -> None:
+    while True:
+        time.sleep(2.0)
+        if _stuck(deadline):
+            log.error("transcription wedged >%.0fs; exiting for systemd "
+                      "restart", deadline)
+            os._exit(42)
 
 
 class Handler(socketserver.StreamRequestHandler):
@@ -129,6 +162,7 @@ def main():
     # Load before accepting connections so the first hotkey press is not the
     # one that waits 20s for the model.
     get_model(cfg)
+    threading.Thread(target=_watchdog, daemon=True).start()
 
     with Server(str(config.SOCKET_PATH), Handler) as srv:
         os.chmod(config.SOCKET_PATH, 0o600)

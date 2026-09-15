@@ -203,7 +203,10 @@ def stop(cfg, args) -> int:
 
 # ---------------------------------------------------------------- transport
 
-def request(payload: dict, timeout: float = 120.0) -> dict:
+# Transcribes normally run ~1s (18.8s of audio took 1.18s on the pinned
+# GPU); 30s already covers a full max_seconds clip with margin. Waiting the
+# old 120s in silence was indistinguishable from a dead toggle.
+def request(payload: dict, timeout: float = 30.0) -> dict:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
         s.connect(str(config.SOCKET_PATH))

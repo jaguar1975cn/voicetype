@@ -7,10 +7,10 @@ Before=sleep.target nvidia-suspend.service
 
 [Service]
 Type=oneshot
-# A daemon already wedged by an earlier bad resume cannot stop; 30s bounds
-# the stall. sleep.target only Wants= this unit, so a failure here still
-# lets sleep proceed.
-TimeoutStartSec=30
+# A daemon already wedged by an earlier bad resume cannot stop; 60s bounds
+# the stall across every configured unit. sleep.target only Wants= this
+# unit, so a failure here still lets sleep proceed.
+TimeoutStartSec=60
 ExecStart=@LIBEXEC@/voicetype-sleep stop
 
 [Install]

@@ -1,43 +1,76 @@
 #!/bin/sh
-# Stop/start the voicetype user daemon around system sleep. Runs as root,
+# Stop/start GPU-holding user services around system sleep. Runs as root,
 # driven by voicetype-pre-sleep.service / voicetype-post-resume.service
 # (contrib/, wired by install-root.sh).
 #
 # Why: a CUDA context that survives a suspend whose GPU state-save failed
 # (not enough disk at NVreg_TemporaryFilePath or disk-backed swap for the
 # VRAM, or a driver bug) comes back attached to dead video memory. The
-# daemon's next call then blocks in an uninterruptible ioctl inside the
+# service's next call then blocks in an uninterruptible ioctl inside the
 # nvidia driver: SIGKILL cannot reap it, systemd's stop ladder ends in
 # 'failed', and the dead context pins its VRAM until reboot. Closing the
 # context before the driver snapshots VRAM makes the service immune to a
-# bad save -- the ~2s model reload after resume replaces it.
+# bad save -- the model reload after resume replaces it.
 #
 # This is a systemd unit and not a /usr/lib/systemd/system-sleep hook
 # because nvidia-suspend.service saves video memory before those hooks run.
+#
+# Units: voicetype.service plus any listed in /etc/default/voicetype-sleep
+# as UNITS="qwen.service ..." -- for other GPU daemons (a llama.cpp
+# server, an image model, ...) that would otherwise wedge on resume.
 set -u
 
 RUN_DIR="${VOICETYPE_RUN_DIR:-/run/user}"
+UNITS_FILE="${VOICETYPE_UNITS_FILE:-/etc/default/voicetype-sleep}"
+# shellcheck disable=SC1090
+[ -f "$UNITS_FILE" ] && . "$UNITS_FILE"
+UNITS="${VOICETYPE_UNITS:-${UNITS:-voicetype.service}}"
 
 case "${1:-}" in
-  # Blocking: the context must be gone before nvidia-suspend.service starts.
+  # Blocking: the contexts must be gone before nvidia-suspend.service starts.
   stop)  ACTION="stop" ;;
-  # Fire-and-forget: first-run model download must not stall resume.
+  # Fire-and-forget: a 27B model load must not stall resume.
   start) ACTION="start --no-block" ;;
   *) echo "usage: $0 stop|start" >&2; exit 2 ;;
 esac
+
+userctl() { # userctl <runtime-dir> <user> <systemctl args...>
+  runuser -u "$2" -- env -u DBUS_SESSION_BUS_ADDRESS \
+    XDG_RUNTIME_DIR="$1" systemctl --user $3 2>/dev/null
+}
 
 rc=0
 for run in "$RUN_DIR"/*; do
   uid=${run##*/}
   case "$uid" in ''|*[!0-9]*) continue ;; esac
   user=$(id -nu "$uid" 2>/dev/null) || continue
-  # Only for users who enabled the unit: never resurrect one who disabled
-  # it, and do not turn "not installed" into a suspend-time failure.
-  if ! runuser -u "$user" -- env -u DBUS_SESSION_BUS_ADDRESS \
-       XDG_RUNTIME_DIR="$run" systemctl --user is-enabled --quiet voicetype.service 2>/dev/null; then
-    continue
+  marker="$run/voicetype-sleep.was-active"
+
+  if [ "$ACTION" = stop ]; then
+    rm -f "$marker"
+    for unit in $UNITS; do
+      # An enabled unit is stopped unconditionally (systemd never re-runs
+      # it across suspend) and always restarted after resume.
+      if userctl "$run" "$user" "is-enabled --quiet $unit"; then
+        userctl "$run" "$user" "stop $unit" || rc=1
+        continue
+      fi
+      # A manually-started (disabled) unit is the operator's call: only
+      # bring it back if this hook is the one that stopped it, recorded
+      # per-user under /run so a reboot or a deliberate stop clears it.
+      if userctl "$run" "$user" "is-active --quiet $unit"; then
+        userctl "$run" "$user" "stop $unit" &&
+          echo "$unit" >>"$marker" || rc=1
+      fi
+    done
+  else
+    for unit in $UNITS; do
+      if userctl "$run" "$user" "is-enabled --quiet $unit" ||
+         grep -qx "$unit" "$marker" 2>/dev/null; then
+        userctl "$run" "$user" "start --no-block $unit" || rc=1
+      fi
+    done
+    rm -f "$marker"
   fi
-  runuser -u "$user" -- env -u DBUS_SESSION_BUS_ADDRESS \
-    XDG_RUNTIME_DIR="$run" systemctl --user $ACTION voicetype.service || rc=1
 done
 exit $rc

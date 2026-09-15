@@ -144,8 +144,18 @@ and start it after resume. The stop must be ordered `Before=nvidia-suspend.servi
 — a stock `/usr/lib/systemd/system-sleep` hook runs *after* that snapshot,
 which is too late — so these are units, not hooks. With them installed, a bad
 GPU save can no longer wedge this service: the ~2s model reload after resume
-replaces the context. It cannot protect other people's GPU processes; fix the
-capacity above for those.
+replaces the context. Anything outside your user services still rides out
+the save; fix the capacity above for those.
+
+Other GPU daemons join via `/etc/default/voicetype-sleep`:
+
+    UNITS="qwen.service"        # e.g. a llama.cpp server
+
+Enabled units are stopped before every suspend and restarted after resume
+(first request after resume waits out the model load). A *disabled* unit
+that happens to be running is also stopped — that is what saves it — but
+only restarted when the hook itself stopped it, so a deliberately stopped
+service stays stopped.
 
 ## Known limits
 
@@ -180,7 +190,7 @@ tuning those — say the word more distinctly, or edit the one word afterwards.
     rm -f ~/.config/systemd/user/{voicetype,ydotoold}.service
     rm -rf ~/.local/share/voicetype ~/.config/voicetype
     sudo systemctl disable --now voicetype-{pre-sleep,post-resume}
-    sudo rm -f /etc/systemd/system/voicetype-{pre-sleep,post-resume}.service /usr/libexec/voicetype/voicetype-sleep /usr/lib/voicetype/voicetype-sleep
+    sudo rm -f /etc/systemd/system/voicetype-{pre-sleep,post-resume}.service /etc/default/voicetype-sleep /usr/libexec/voicetype/voicetype-sleep /usr/lib/voicetype/voicetype-sleep
     sudo rm -f /etc/udev/rules.d/60-uinput-ydotool.rules
 
 Clear the shortcuts in Settings → Keyboard → Custom Shortcuts.

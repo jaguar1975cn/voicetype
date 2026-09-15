@@ -1,0 +1,12 @@
+[Unit]
+Description=Restart voicetype daemons after resume from sleep
+# suspend.target activates only once the sleep operation itself is over, so
+# a unit wanted by it and ordered After= it runs after resume, not before.
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=@LIBEXEC@/voicetype-sleep start
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

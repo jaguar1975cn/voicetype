@@ -122,6 +122,31 @@ deliberately not in this repo — recordings are personal data. Make one with
 phrase); the test skips while it is absent. espeak-ng's Mandarin is too
 synthetic for Whisper to decode, so it cannot be synthesised.
 
+## Suspend / resume
+
+The daemon holds a CUDA context across sleep. NVIDIA only survives that if
+it can snapshot video memory at suspend (`NVreg_PreserveVideoMemoryAllocations=1`
+plus the `nvidia-suspend`/`nvidia-resume` units), which needs free space at
+`NVreg_TemporaryFilePath` (and disk-backed swap — zram does not count) of at
+least total VRAM across all GPUs. When the save fails, the resume leaves every
+context attached to dead video memory; the daemon's next transcribe then
+blocks in an uninterruptible ioctl inside the driver. That stage is not
+killable — SIGKILL included — and the corpse pins its VRAM until reboot.
+Check with:
+
+    grep -iE 'Preserve|TemporaryFilePath' /proc/driver/nvidia/params
+    df /var/tmp                      # must exceed combined VRAM
+    swapon --show                    # zram-only swap is not enough
+
+On top of that requirement, `install-root.sh` installs two system units
+(wired in `contrib/`) that stop the daemon before the driver snapshots VRAM
+and start it after resume. The stop must be ordered `Before=nvidia-suspend.service`
+— a stock `/usr/lib/systemd/system-sleep` hook runs *after* that snapshot,
+which is too late — so these are units, not hooks. With them installed, a bad
+GPU save can no longer wedge this service: the ~2s model reload after resume
+replaces the context. It cannot protect other people's GPU processes; fix the
+capacity above for those.
+
 ## Known limits
 
 An isolated English word inside an otherwise Chinese sentence is occasionally
@@ -141,6 +166,7 @@ tuning those — say the word more distinctly, or edit the one word afterwards.
 | Symptom | Check |
 |---|---|
 | "Daemon unreachable" | `systemctl --user status voicetype`, `journalctl --user -u voicetype -n 50` |
+| Press again → no paste, error only ~30s later | nvidia driver wedge on the pinned GPU: journal shows `transcription wedged`; the daemon kills itself and systemd restarts it — retry the hotkey ~25s later. If it wedged right after resume, the GPU state-save failed — see "Suspend / resume". An unreapable wedged process needs a reboot; until then CUDA init on that GPU also hangs, so a service restart is pointless |
 | "ydotool failed" | `systemctl --user status ydotoold`; is your user in the `input` group? (`id -nG`) |
 | Nothing pastes, text is on clipboard | target app has no Ctrl+V; use `Shift+Super+Z` |
 | CUDA out of memory | another process is on the pinned GPU: `nvidia-smi` |
@@ -153,6 +179,8 @@ tuning those — say the word more distinctly, or edit the one word afterwards.
     rm -f ~/.local/bin/voicetype-{daemon,toggle,record-fixture}
     rm -f ~/.config/systemd/user/{voicetype,ydotoold}.service
     rm -rf ~/.local/share/voicetype ~/.config/voicetype
+    sudo systemctl disable --now voicetype-{pre-sleep,post-resume}
+    sudo rm -f /etc/systemd/system/voicetype-{pre-sleep,post-resume}.service /usr/libexec/voicetype/voicetype-sleep /usr/lib/voicetype/voicetype-sleep
     sudo rm -f /etc/udev/rules.d/60-uinput-ydotool.rules
 
 Clear the shortcuts in Settings → Keyboard → Custom Shortcuts.

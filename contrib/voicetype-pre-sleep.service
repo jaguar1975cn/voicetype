@@ -1,0 +1,17 @@
+[Unit]
+Description=Release voicetype GPU contexts before the NVIDIA VRAM snapshot
+# nvidia-suspend.service snapshots video memory before systemd-suspend.service
+# (and before /usr/lib/systemd/system-sleep hooks) run, so closing the
+# daemon's CUDA contexts must be ordered ahead of it, not merely before sleep.
+Before=sleep.target nvidia-suspend.service
+
+[Service]
+Type=oneshot
+# A daemon already wedged by an earlier bad resume cannot stop; 30s bounds
+# the stall. sleep.target only Wants= this unit, so a failure here still
+# lets sleep proceed.
+TimeoutStartSec=30
+ExecStart=@LIBEXEC@/voicetype-sleep stop
+
+[Install]
+WantedBy=sleep.target

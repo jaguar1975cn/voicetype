@@ -1,0 +1,43 @@
+#!/bin/sh
+# Stop/start the voicetype user daemon around system sleep. Runs as root,
+# driven by voicetype-pre-sleep.service / voicetype-post-resume.service
+# (contrib/, wired by install-root.sh).
+#
+# Why: a CUDA context that survives a suspend whose GPU state-save failed
+# (not enough disk at NVreg_TemporaryFilePath or disk-backed swap for the
+# VRAM, or a driver bug) comes back attached to dead video memory. The
+# daemon's next call then blocks in an uninterruptible ioctl inside the
+# nvidia driver: SIGKILL cannot reap it, systemd's stop ladder ends in
+# 'failed', and the dead context pins its VRAM until reboot. Closing the
+# context before the driver snapshots VRAM makes the service immune to a
+# bad save -- the ~2s model reload after resume replaces it.
+#
+# This is a systemd unit and not a /usr/lib/systemd/system-sleep hook
+# because nvidia-suspend.service saves video memory before those hooks run.
+set -u
+
+RUN_DIR="${VOICETYPE_RUN_DIR:-/run/user}"
+
+case "${1:-}" in
+  # Blocking: the context must be gone before nvidia-suspend.service starts.
+  stop)  ACTION="stop" ;;
+  # Fire-and-forget: first-run model download must not stall resume.
+  start) ACTION="start --no-block" ;;
+  *) echo "usage: $0 stop|start" >&2; exit 2 ;;
+esac
+
+rc=0
+for run in "$RUN_DIR"/*; do
+  uid=${run##*/}
+  case "$uid" in ''|*[!0-9]*) continue ;; esac
+  user=$(id -nu "$uid" 2>/dev/null) || continue
+  # Only for users who enabled the unit: never resurrect one who disabled
+  # it, and do not turn "not installed" into a suspend-time failure.
+  if ! runuser -u "$user" -- env -u DBUS_SESSION_BUS_ADDRESS \
+       XDG_RUNTIME_DIR="$run" systemctl --user is-enabled --quiet voicetype.service 2>/dev/null; then
+    continue
+  fi
+  runuser -u "$user" -- env -u DBUS_SESSION_BUS_ADDRESS \
+    XDG_RUNTIME_DIR="$run" systemctl --user $ACTION voicetype.service || rc=1
+done
+exit $rc

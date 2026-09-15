@@ -14,17 +14,17 @@
 #
 # This is a systemd unit and not a /usr/lib/systemd/system-sleep hook
 # because nvidia-suspend.service saves video memory before those hooks run.
-#
-# Units: voicetype.service plus any listed in /etc/default/voicetype-sleep
-# as UNITS="qwen.service ..." -- for other GPU daemons (a llama.cpp
-# server, an image model, ...) that would otherwise wedge on resume.
+# Units: voicetype.service is always guarded; /etc/default/voicetype-sleep
+# can only add to it -- EXTRA_UNITS="qwen.service ..." for other GPU daemons
+# (a llama.cpp server, an image model, ...) that would otherwise wedge on
+# resume. Adding a unit can never silently drop the built-in one.
 set -u
 
 RUN_DIR="${VOICETYPE_RUN_DIR:-/run/user}"
 UNITS_FILE="${VOICETYPE_UNITS_FILE:-/etc/default/voicetype-sleep}"
 # shellcheck disable=SC1090
 [ -f "$UNITS_FILE" ] && . "$UNITS_FILE"
-UNITS="${VOICETYPE_UNITS:-${UNITS:-voicetype.service}}"
+UNITS="${VOICETYPE_UNITS:-voicetype.service ${EXTRA_UNITS:-}}"
 
 case "${1:-}" in
   # Blocking: the contexts must be gone before nvidia-suspend.service starts.

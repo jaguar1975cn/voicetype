@@ -147,9 +147,9 @@ GPU save can no longer wedge this service: the ~2s model reload after resume
 replaces the context. Anything outside your user services still rides out
 the save; fix the capacity above for those.
 
-Other GPU daemons join via `/etc/default/voicetype-sleep`:
+Extra GPU daemons join via `/etc/default/voicetype-sleep`:
 
-    UNITS="qwen.service"        # e.g. a llama.cpp server
+    EXTRA_UNITS="qwen.service"      # e.g. a llama.cpp server
 
 Enabled units are stopped before every suspend and restarted after resume
 (first request after resume waits out the model load). A *disabled* unit

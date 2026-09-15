@@ -195,6 +195,35 @@ class TestStartPhase:
         assert not (run_ / "1001" / MARKER).exists()
 
 
+class TestUnitsConfig:
+    """/etc/default 只能追加,不能顶掉内置的 voicetype.service。"""
+
+    def base_env(self, rig, units_file):
+        env, calls, state, run_ = rig
+        del env["VOICETYPE_UNITS"]           # 走真实配置路径
+        env["VOICETYPE_UNITS_FILE"] = str(units_file)
+        return env, calls, state, run_
+
+    def test_no_config_only_built_in_unit(self, rig, tmp_path):
+        env, calls, state, run_ = self.base_env(rig, tmp_path / "absent")
+        seed(state, [], ["voicetype.service", "qwen.service"])
+        run(env, "stop")
+        assert calls_for(calls, "voicetype.service")
+        assert calls_for(calls, "qwen.service") == []
+
+    def test_extra_units_add_without_dropping_default(self, rig, tmp_path):
+        cfg = tmp_path / "default-voicetype-sleep"
+        cfg.write_text('EXTRA_UNITS="qwen.service"\n')
+        env, calls, state, run_ = self.base_env(rig, cfg)
+        seed(state, ["voicetype.service"],
+             ["voicetype.service", "qwen.service"])
+        r = run(env, "stop")
+        assert r.returncode == 0
+        assert calls_for(calls, "voicetype.service")
+        assert calls_for(calls, "qwen.service")
+        assert (run_ / "1000" / MARKER).read_text().splitlines() == ["qwen.service"]
+
+
 class TestUnitOrdering:
     """挂起事务里的相对位置;错了保护就静默失效,没有别的检查能兜住。"""
 
